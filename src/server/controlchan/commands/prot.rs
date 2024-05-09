@@ -44,16 +44,36 @@ where
 {
     #[tracing_attributes::instrument]
     async fn handle(&self, args: CommandContext<Storage, User>) -> Result<Reply, ControlChanError> {
-        match (args.tls_configured, self.param.clone()) {
+        let tls = {
+            #[cfg(feature = "tls")]
+            {
+                args.tls_configured
+            }
+            #[cfg(not(feature = "tls"))]
+            {
+                true
+            }
+        };
+        match (tls, self.param.clone()) {
             (true, ProtParam::Clear) => {
                 let mut session = args.session.lock().await;
-                session.data_tls = false;
+                #[cfg(feature = "tls")]
+                {
+                    session.data_tls = false;
+                }
                 Ok(Reply::new(ReplyCode::CommandOkay, "PROT OK. Switching data channel to plaintext"))
             }
             (true, ProtParam::Private) => {
-                let mut session = args.session.lock().await;
-                session.data_tls = true;
-                Ok(Reply::new(ReplyCode::CommandOkay, "PROT OK. Securing data channel"))
+                #[cfg(not(feature = "tls"))]
+                {
+                    unimplemented!("unimplemented tls!")
+                }
+                #[cfg(feature = "tls")]
+                {
+                    let mut session = args.session.lock().await;
+                    session.data_tls = true;
+                    Ok(Reply::new(ReplyCode::CommandOkay, "PROT OK. Securing data channel"))
+                }
             }
             (true, _) => Ok(Reply::new(ReplyCode::CommandNotImplementedForParameter, "PROT S/E not implemented")),
             (false, _) => Ok(Reply::new(ReplyCode::CommandNotImplemented, "TLS/SSL not configured")),

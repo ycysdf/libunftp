@@ -9,18 +9,16 @@ use super::{
     failed_logins::FailedLoginsCache,
     ftpserver::{error::ServerError, error::ShutdownError, options::FtpsRequired, options::SiteMd5},
     shutdown,
-    tls::FtpsConfig,
 };
 use crate::options::ActivePassiveMode;
+#[cfg(feature = "tls")]
+use crate::server::tls::{self, FtpsConfig};
 use crate::{
     auth::{anonymous::AnonymousAuthenticator, Authenticator, UserDetail},
     notification::{nop::NopListener, DataListener, PresenceListener},
     options::{FailedLoginsPolicy, FtpsClientAuth, TlsFlags},
+    server::proxy_protocol::{ProxyMode, ProxyProtocolSwitchboard},
     server::shutdown::Notifier,
-    server::{
-        proxy_protocol::{ProxyMode, ProxyProtocolSwitchboard},
-        tls,
-    },
     storage::{Metadata, StorageBackend},
 };
 use options::{PassiveHost, DEFAULT_GREETING, DEFAULT_IDLE_SESSION_TIMEOUT_SECS};
@@ -62,8 +60,11 @@ where
     passive_ports: Range<u16>,
     passive_host: PassiveHost,
     collect_metrics: bool,
+    #[cfg(feature = "tls")]
     ftps_mode: FtpsConfig,
+    #[cfg(feature = "tls")]
     ftps_required_control_chan: FtpsRequired,
+    #[cfg(feature = "tls")]
     ftps_required_data_chan: FtpsRequired,
     idle_session_timeout: std::time::Duration,
     proxy_protocol_mode: ProxyMode,
@@ -77,7 +78,7 @@ where
     binder: Arc<std::sync::Mutex<Option<Box<dyn crate::options::Binder>>>>,
 }
 
-/// Used to create [`Server`]s.  
+/// Used to create [`Server`]s.
 pub struct ServerBuilder<Storage, User>
 where
     Storage: StorageBackend<User>,
@@ -91,11 +92,17 @@ where
     passive_ports: Range<u16>,
     passive_host: PassiveHost,
     collect_metrics: bool,
+    #[cfg(feature = "tls")]
     ftps_mode: FtpsConfig,
+    #[cfg(feature = "tls")]
     ftps_required_control_chan: FtpsRequired,
+    #[cfg(feature = "tls")]
     ftps_required_data_chan: FtpsRequired,
+    #[cfg(feature = "tls")]
     ftps_tls_flags: TlsFlags,
+    #[cfg(feature = "tls")]
     ftps_client_auth: FtpsClientAuth,
+    #[cfg(feature = "tls")]
     ftps_trust_store: PathBuf,
     idle_session_timeout: std::time::Duration,
     proxy_protocol_mode: ProxyMode,
@@ -142,15 +149,21 @@ where
             presence_listener: Arc::new(NopListener {}),
             passive_ports,
             passive_host: options::DEFAULT_PASSIVE_HOST,
+            #[cfg(feature = "tls")]
             ftps_mode: FtpsConfig::Off,
             collect_metrics: false,
             idle_session_timeout: Duration::from_secs(DEFAULT_IDLE_SESSION_TIMEOUT_SECS),
             proxy_protocol_mode: ProxyMode::Off,
             logger: slog::Logger::root(slog_stdlog::StdLog {}.fuse(), slog::o!()),
+            #[cfg(feature = "tls")]
             ftps_required_control_chan: options::DEFAULT_FTPS_REQUIRE,
+            #[cfg(feature = "tls")]
             ftps_required_data_chan: options::DEFAULT_FTPS_REQUIRE,
+            #[cfg(feature = "tls")]
             ftps_tls_flags: TlsFlags::default(),
+            #[cfg(feature = "tls")]
             ftps_client_auth: FtpsClientAuth::default(),
+            #[cfg(feature = "tls")]
             ftps_trust_store: options::DEFAULT_FTPS_TRUST_STORE.into(),
             site_md5: SiteMd5::default(),
             shutdown: Box::pin(futures_util::future::pending()),
@@ -206,6 +219,7 @@ where
 
     /// Finalize the options and build a [`Server`].
     pub async fn build(self) -> std::result::Result<Server<Storage, User>, ServerError> {
+        #[cfg(feature = "tls")]
         let ftps_mode = match self.ftps_mode {
             FtpsConfig::Off => FtpsConfig::Off,
             FtpsConfig::Building { certs_file, key_file } => FtpsConfig::On {
@@ -223,8 +237,11 @@ where
             passive_ports: self.passive_ports,
             passive_host: self.passive_host,
             collect_metrics: self.collect_metrics,
+            #[cfg(feature = "tls")]
             ftps_mode,
+            #[cfg(feature = "tls")]
             ftps_required_control_chan: self.ftps_required_control_chan,
+            #[cfg(feature = "tls")]
             ftps_required_data_chan: self.ftps_required_data_chan,
             idle_session_timeout: self.idle_session_timeout,
             proxy_protocol_mode: self.proxy_protocol_mode,
@@ -251,6 +268,8 @@ where
     /// let server = Server::with_fs("/tmp")
     ///              .ftps("/srv/unftp/server.certs", "/srv/unftp/server.key");
     /// ```
+    #[cfg(feature = "tls")]
+    #[cfg(feature = "tls")]
     pub fn ftps<P: Into<PathBuf>>(mut self, certs_file: P, key_file: P) -> Self {
         self.ftps_mode = FtpsConfig::Building {
             certs_file: certs_file.into(),
@@ -275,6 +294,7 @@ where
     ///              .ftps_trust_store("/srv/unftp/trusted.pem");
     /// ```
 
+    #[cfg(feature = "tls")]
     pub fn ftps_client_auth<C>(mut self, auth: C) -> Self
     where
         C: Into<FtpsClientAuth>,
@@ -284,6 +304,7 @@ where
     }
 
     /// Configures whether client connections may use plaintext mode or not.
+    #[cfg(feature = "tls")]
     pub fn ftps_required<R>(mut self, for_control_chan: R, for_data_chan: R) -> Self
     where
         R: Into<FtpsRequired>,
@@ -308,6 +329,7 @@ where
     ///              .ftps_client_auth(true)
     ///              .ftps_trust_store("/srv/unftp/trusted.pem");
     /// ```
+    #[cfg(feature = "tls")]
     pub fn ftps_trust_store<P>(mut self, trust: P) -> Self
     where
         P: Into<PathBuf>,
@@ -332,6 +354,7 @@ where
     ///                  .ftps("/srv/unftp/server.certs", "/srv/unftp/server.key")
     ///                  .ftps_tls_flags(TlsFlags::V1_3 | TlsFlags::RESUMPTION_TICKETS);
     /// ```
+    #[cfg(feature = "tls")]
     pub fn ftps_tls_flags(mut self, flags: TlsFlags) -> Self {
         self.ftps_tls_flags = flags;
         self
@@ -808,6 +831,7 @@ where
         chosen::OptionsHolder {
             authenticator: server.authenticator.clone(),
             storage: server.storage.clone(),
+            #[cfg(feature = "tls")]
             ftps_config: server.ftps_mode.clone(),
             collect_metrics: server.collect_metrics,
             greeting: server.greeting,
@@ -815,7 +839,9 @@ where
             passive_ports: server.passive_ports.clone(),
             passive_host: server.passive_host.clone(),
             logger: server.logger.new(slog::o!()),
+            #[cfg(feature = "tls")]
             ftps_required_control_chan: server.ftps_required_control_chan,
+            #[cfg(feature = "tls")]
             ftps_required_data_chan: server.ftps_required_data_chan,
             site_md5: server.site_md5,
             data_listener: server.data_listener.clone(),
@@ -832,8 +858,8 @@ where
     User: UserDetail,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ServerBuilder")
-            .field("authenticator", &self.authenticator)
+        let mut r = f.debug_struct("ServerBuilder");
+        r.field("authenticator", &self.authenticator)
             .field("collect_metrics", &self.collect_metrics)
             .field("active_passive_mode", &self.active_passive_mode)
             .field("greeting", &self.greeting)
@@ -841,16 +867,18 @@ where
             .field("metrics", &self.collect_metrics)
             .field("passive_ports", &self.passive_ports)
             .field("passive_host", &self.passive_host)
-            .field("ftps_client_auth", &self.ftps_client_auth)
+            .field("idle_session_timeout", &self.idle_session_timeout)
+            .field("proxy_protocol_mode", &self.proxy_protocol_mode)
+            .field("failed_logins_policy", &self.failed_logins_policy);
+        #[cfg(feature = "tls")]
+        r.field("ftps_client_auth", &self.ftps_client_auth)
             .field("ftps_mode", &self.ftps_mode)
             .field("ftps_required_control_chan", &self.ftps_required_control_chan)
             .field("ftps_required_data_chan", &self.ftps_required_data_chan)
             .field("ftps_tls_flags", &self.ftps_tls_flags)
-            .field("ftps_trust_store", &self.ftps_trust_store)
-            .field("idle_session_timeout", &self.idle_session_timeout)
-            .field("proxy_protocol_mode", &self.proxy_protocol_mode)
-            .field("failed_logins_policy", &self.failed_logins_policy)
-            .finish()
+            .field("ftps_trust_store", &self.ftps_trust_store);
+
+        r.finish()
     }
 }
 
@@ -860,8 +888,8 @@ where
     User: UserDetail,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ServerBuilder")
-            .field("authenticator", &self.authenticator)
+        let mut r = f.debug_struct("ServerBuilder");
+        r.field("authenticator", &self.authenticator)
             .field("collect_metrics", &self.collect_metrics)
             .field("active_passive_mode", &self.active_passive_mode)
             .field("greeting", &self.greeting)
@@ -869,12 +897,16 @@ where
             .field("metrics", &self.collect_metrics)
             .field("passive_ports", &self.passive_ports)
             .field("passive_host", &self.passive_host)
-            .field("ftps_mode", &self.ftps_mode)
-            .field("ftps_required_control_chan", &self.ftps_required_control_chan)
-            .field("ftps_required_data_chan", &self.ftps_required_data_chan)
             .field("idle_session_timeout", &self.idle_session_timeout)
             .field("proxy_protocol_mode", &self.proxy_protocol_mode)
-            .field("failed_logins_policy", &self.failed_logins_policy)
-            .finish()
+            .field("failed_logins_policy", &self.failed_logins_policy);
+
+        #[cfg(feature = "tls")]
+        {
+            r.field("ftps_mode", &self.ftps_mode)
+                .field("ftps_required_control_chan", &self.ftps_required_control_chan)
+                .field("ftps_required_data_chan", &self.ftps_required_data_chan);
+        }
+        r.finish()
     }
 }

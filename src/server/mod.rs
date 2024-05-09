@@ -9,6 +9,7 @@ mod password;
 mod proxy_protocol;
 mod session;
 pub(crate) mod shutdown;
+#[cfg(feature = "tls")]
 mod tls;
 
 pub(crate) use chancomms::ControlChanMsg;

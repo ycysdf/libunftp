@@ -1,7 +1,9 @@
 //! The session module implements per-connection session handling and currently also
 //! implements the handling for the *data* channel.
 
-use super::{chancomms::ControlChanMsg, tls::FtpsConfig};
+use super::chancomms::ControlChanMsg;
+#[cfg(feature = "tls")]
+use super::tls::FtpsConfig;
 use crate::auth::UserDetail;
 use crate::server::chancomms::DataChanCmd;
 use crate::server::failed_logins::FailedLoginsCache;
@@ -96,10 +98,13 @@ where
     pub state: SessionState,
     // Tells if FTPS/TLS security is available to the session or not. The variables cmd_tls and
     // data_tls tells if the channels are actually encrypted or not.
+    #[cfg(feature = "tls")]
     pub ftps_config: FtpsConfig,
     // True if the command channel is in secure mode at the moment. Changed by AUTH and CCC commands.
+    #[cfg(feature = "tls")]
     pub cmd_tls: bool,
     // True if the data channel is in secure mode at the moment. Changed by the PROT command.
+    #[cfg(feature = "tls")]
     pub data_tls: bool,
     // True if metrics for prometheus are updated.
     pub collect_metrics: bool,
@@ -140,8 +145,11 @@ where
             cwd: "/".into(),
             rename_from: None,
             state: SessionState::New,
+            #[cfg(feature = "tls")]
             ftps_config: FtpsConfig::Off,
+            #[cfg(feature = "tls")]
             cmd_tls: false,
+            #[cfg(feature = "tls")]
             data_tls: false,
             collect_metrics: false,
             start_pos: 0,
@@ -152,6 +160,7 @@ where
         }
     }
 
+    #[cfg(feature = "tls")]
     pub fn ftps(mut self, mode: FtpsConfig) -> Self {
         self.ftps_config = mode;
         self

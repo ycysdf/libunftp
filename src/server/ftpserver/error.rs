@@ -34,7 +34,7 @@ impl From<std::io::Error> for ServerError {
         ServerError::new("io error", e)
     }
 }
-
+#[cfg(feature = "tls")]
 impl From<super::tls::ConfigError> for ServerError {
     fn from(e: super::tls::ConfigError) -> Self {
         ServerError::new(format!("error with TLS configuration: {}", e), e)

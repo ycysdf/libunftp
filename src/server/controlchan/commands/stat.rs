@@ -64,8 +64,11 @@ where
                     format!("authenticator: {}", args.authenticator.name()),
                     format!("user: {}", session.username.as_ref().unwrap()),
                     format!("client addr: {}", session.source),
+                    #[cfg(feature = "tls")]
                     format!("ftps configured: {}", args.tls_configured),
+                    #[cfg(feature = "tls")]
                     format!("cmd channel in tls mode: {}", session.cmd_tls),
+                    #[cfg(feature = "tls")]
                     format!("data channel in tls mode: {}", session.data_tls),
                     format!("cwd: {}", session.cwd.to_string_lossy()),
                     format!("rename from path: {:?}", session.rename_from),

@@ -1,3 +1,8 @@
+#[cfg(feature = "tls")]
+use crate::server::{
+    controlchan::ftps::{FtpsControlChanEnforcerMiddleware, FtpsDataChanEnforcerMiddleware},
+    tls::FtpsConfig,
+};
 use crate::{
     auth::{Authenticator, UserDetail},
     metrics::MetricsMiddleware,
@@ -13,7 +18,6 @@ use crate::{
             commands,
             error::ControlChanError,
             error::ControlChanErrorKind,
-            ftps::{FtpsControlChanEnforcerMiddleware, FtpsDataChanEnforcerMiddleware},
             handler::{CommandContext, CommandHandler},
             log::LoggingMiddleware,
             middleware::ControlChanMiddleware,
@@ -24,15 +28,12 @@ use crate::{
         ftpserver::options::{FtpsRequired, PassiveHost, SiteMd5},
         proxy_protocol::ProxyConnection,
         session::SharedSession,
-        shutdown,
-        tls::FtpsConfig,
-        Event, Session, SessionState,
+        shutdown, Event, Session, SessionState,
     },
     storage::{ErrorKind, Metadata, StorageBackend},
 };
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
-use rustls::ServerConnection;
 use std::{net::SocketAddr, ops::Range, sync::Arc, time::Duration};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -60,11 +61,14 @@ where
     pub authenticator: Arc<dyn Authenticator<User>>,
     pub passive_ports: Range<u16>,
     pub passive_host: PassiveHost,
+    #[cfg(feature = "tls")]
     pub ftps_config: FtpsConfig,
     pub collect_metrics: bool,
     pub idle_session_timeout: Duration,
     pub logger: slog::Logger,
+    #[cfg(feature = "tls")]
     pub ftps_required_control_chan: FtpsRequired,
+    #[cfg(feature = "tls")]
     pub ftps_required_data_chan: FtpsRequired,
     pub site_md5: SiteMd5,
     pub data_listener: Arc<dyn DataListener>,
@@ -93,8 +97,11 @@ where
         authenticator,
         passive_ports,
         passive_host,
+        #[cfg(feature = "tls")]
         ftps_config,
+        #[cfg(feature = "tls")]
         ftps_required_control_chan,
+        #[cfg(feature = "tls")]
         ftps_required_data_chan,
         collect_metrics,
         idle_session_timeout,
@@ -107,12 +114,16 @@ where
         ..
     } = config;
 
+    #[cfg(feature = "tls")]
     let tls_configured = matches!(ftps_config, FtpsConfig::On { .. });
     let storage_features = storage.supported_features();
     let (control_msg_tx, mut control_msg_rx): (Sender<ControlChanMsg>, Receiver<ControlChanMsg>) = channel(1);
     let local_addr = tcp_stream.local_addr()?;
-    let mut session: Session<Storage, User> = Session::new(Arc::new(storage), tcp_stream.peer_addr()?)
-        .ftps(ftps_config.clone())
+    let session: Session<Storage, User> = Session::new(Arc::new(storage), tcp_stream.peer_addr()?);
+    #[cfg(feature = "tls")]
+    let session = session.ftps(ftps_config.clone());
+
+    let mut session = session
         .metrics(collect_metrics)
         .control_msg_tx(control_msg_tx.clone())
         .proxy_connection(proxy_connection)
@@ -131,6 +142,7 @@ where
         logger: logger.clone(),
         session: shared_session.clone(),
         authenticator: authenticator.clone(),
+        #[cfg(feature = "tls")]
         tls_configured,
         passive_ports,
         passive_host,
@@ -153,12 +165,14 @@ where
         next: event_chain,
     };
 
+    #[cfg(feature = "tls")]
     let event_chain = FtpsControlChanEnforcerMiddleware {
         session: shared_session.clone(),
         ftps_requirement: ftps_required_control_chan,
         next: event_chain,
     };
 
+    #[cfg(feature = "tls")]
     let event_chain = FtpsDataChanEnforcerMiddleware {
         session: shared_session.clone(),
         ftps_requirement: ftps_required_data_chan,
@@ -233,7 +247,9 @@ where
                     return;
                 }
                 Some(Ok(event)) => {
+                    #[cfg(feature = "tls")]
                     if let Event::InternalMsg(ControlChanMsg::SecureControlChannel) = event {
+                        use rustls::ServerConnection;
                         slog::info!(logger, "Upgrading control channel to TLS");
 
                         // Get back the original TCP Stream
@@ -329,6 +345,7 @@ where
     logger: slog::Logger,
     session: SharedSession<Storage, User>,
     authenticator: Arc<dyn Authenticator<User>>,
+    #[cfg(feature = "tls")]
     tls_configured: bool,
     passive_ports: Range<u16>,
     passive_host: PassiveHost,
@@ -373,13 +390,20 @@ where
             DelFail => Ok(Reply::new(ReplyCode::TransientFileError, "Failed to delete the file")),
             ExitControlLoop => Ok(Reply::none()),
             SecureControlChannel => {
+                // TODO:
                 let mut session = self.session.lock().await;
-                session.cmd_tls = true;
+                #[cfg(feature = "tls")]
+                {
+                    session.cmd_tls = true;
+                }
                 Ok(Reply::none())
             }
             PlaintextControlChannel => {
                 let mut session = self.session.lock().await;
-                session.cmd_tls = false;
+                #[cfg(feature = "tls")]
+                {
+                    session.cmd_tls = false;
+                }
                 Ok(Reply::none())
             }
             MkDirSuccess { path } => Ok(Reply::new_with_string(ReplyCode::DirCreated, path)),
@@ -419,6 +443,7 @@ where
             parsed_command: cmd.clone(),
             session: self.session.clone(),
             authenticator: self.authenticator.clone(),
+            #[cfg(feature = "tls")]
             tls_configured: self.tls_configured,
             passive_ports: self.passive_ports.clone(),
             passive_host: self.passive_host.clone(),

@@ -13,6 +13,7 @@ mod auth;
 mod codecs;
 mod control_loop;
 mod error;
+#[cfg(feature = "tls")]
 mod ftps;
 mod line_parser;
 mod log;

@@ -47,7 +47,18 @@ where
     async fn handle(&self, args: CommandContext<Storage, User>) -> Result<Reply, ControlChanError> {
         let tx = args.tx_control_chan.clone();
         let logger = args.logger;
-        match (args.tls_configured, self.protocol.clone()) {
+
+        let tls = {
+            #[cfg(feature = "tls")]
+            {
+                args.tls_configured
+            }
+            #[cfg(not(feature = "tls"))]
+            {
+                true
+            }
+        };
+        match (tls, self.protocol.clone()) {
             (true, AuthParam::Tls) => {
                 tokio::spawn(async move {
                     if let Err(err) = tx.send(ControlChanMsg::SecureControlChannel).await {

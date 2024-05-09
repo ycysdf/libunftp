@@ -29,6 +29,7 @@ where
         let mut feat_text = vec![" SIZE", " MDTM", " UTF8"];
         // Add the features. According to the spec each feature line must be
         // indented by a space.
+        #[cfg(feature = "tls")]
         if args.tls_configured {
             feat_text.push(" AUTH TLS");
             feat_text.push(" PBSZ");

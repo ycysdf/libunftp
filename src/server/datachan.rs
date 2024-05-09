@@ -1,23 +1,22 @@
 //! Contains code pertaining to the FTP *data* channel
 
-use super::{
-    chancomms::{ControlChanMsg, DataChanMsg},
-    tls::FtpsConfig,
-};
+use super::chancomms::{ControlChanMsg, DataChanMsg};
 use crate::server::session::SharedSession;
 use crate::{
     auth::UserDetail,
     storage::{Error, ErrorKind, Metadata, StorageBackend},
 };
 
+#[cfg(feature = "tls")]
+use super::tls::FtpsConfig;
+use crate::metrics;
 use crate::server::chancomms::DataChanCmd;
 use std::{path::PathBuf, sync::Arc};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadBuf};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::{Receiver, Sender};
+#[cfg(feature = "tls")]
 use tokio_rustls::TlsAcceptor;
-
-use crate::metrics;
 
 #[derive(Debug)]
 struct DataCommandExecutor<Storage, User>
@@ -31,6 +30,7 @@ where
     pub control_msg_tx: Sender<ControlChanMsg>,
     pub storage: Arc<Storage>,
     pub cwd: PathBuf,
+    #[cfg(feature = "tls")]
     pub ftps_mode: FtpsConfig,
     pub logger: slog::Logger,
     pub data_cmd_rx: Option<Receiver<DataChanCmd>>,
@@ -163,7 +163,13 @@ where
         let path_copy = path.clone();
         let path = self.cwd.join(path);
         let tx: Sender<ControlChanMsg> = self.control_msg_tx.clone();
-        let mut output = Self::writer(self.socket, self.ftps_mode, "retr").await;
+        let mut output = Self::writer(
+            self.socket,
+            #[cfg(feature = "tls")]
+            self.ftps_mode,
+            "retr",
+        )
+        .await;
 
         let start_time = Instant::now();
         let result = self.storage.get_into((*self.user).as_ref().unwrap(), path, start_pos, &mut output).await;
@@ -262,7 +268,13 @@ where
             .storage
             .put(
                 (*self.user).as_ref().unwrap(),
-                Self::reader(self.socket, self.ftps_mode, "stor").await,
+                Self::reader(
+                    self.socket,
+                    #[cfg(feature = "tls")]
+                    self.ftps_mode,
+                    "stor",
+                )
+                .await,
                 path,
                 start_pos,
             )
@@ -309,7 +321,13 @@ where
     async fn exec_list_variant(self, path: Option<String>, command: ListCommand) {
         let path = self.resolve_path(path);
         let tx = self.control_msg_tx.clone();
-        let mut output = Self::writer(self.socket, self.ftps_mode.clone(), command.as_lower_str()).await;
+        let mut output = Self::writer(
+            self.socket,
+            #[cfg(feature = "tls")]
+            self.ftps_mode.clone(),
+            command.as_lower_str(),
+        )
+        .await;
 
         let start_time = Instant::now();
 
@@ -393,36 +411,50 @@ where
         }
     }
 
-    #[tracing_attributes::instrument]
-    async fn writer(socket: TcpStream, ftps_mode: FtpsConfig, command: &'static str) -> Box<dyn AsyncWrite + Send + Unpin + Sync> {
-        match ftps_mode {
-            FtpsConfig::Off => Box::new(MeasuringWriter::new(socket, command)) as Box<dyn AsyncWrite + Send + Unpin + Sync>,
-            FtpsConfig::Building { .. } => panic!("Illegal state"),
-            FtpsConfig::On { tls_config } => {
-                let io = async move {
-                    let acceptor: TlsAcceptor = tls_config.into();
-                    let tls_stream = acceptor.accept(socket).await.unwrap();
-                    MeasuringWriter::new(tls_stream, command)
+    // #[tracing_attributes::instrument]
+    async fn writer(socket: TcpStream, #[cfg(feature = "tls")] ftps_mode: FtpsConfig, command: &'static str) -> Box<dyn AsyncWrite + Send + Unpin + Sync> {
+        #[cfg(not(feature = "tls"))]
+        {
+            Box::new(MeasuringWriter::new(socket, command)) as Box<dyn AsyncWrite + Send + Unpin + Sync>
+        }
+        #[cfg(feature = "tls")]
+        {
+            match ftps_mode {
+                FtpsConfig::Off => Box::new(MeasuringWriter::new(socket, command)) as Box<dyn AsyncWrite + Send + Unpin + Sync>,
+                FtpsConfig::Building { .. } => panic!("Illegal state"),
+                FtpsConfig::On { tls_config } => {
+                    let io = async move {
+                        let acceptor: TlsAcceptor = tls_config.into();
+                        let tls_stream = acceptor.accept(socket).await.unwrap();
+                        MeasuringWriter::new(tls_stream, command)
+                    }
+                    .await;
+                    Box::new(io) as Box<dyn AsyncWrite + Send + Unpin + Sync>
                 }
-                .await;
-                Box::new(io) as Box<dyn AsyncWrite + Send + Unpin + Sync>
             }
         }
     }
 
-    #[tracing_attributes::instrument]
-    async fn reader(socket: TcpStream, ftps_mode: FtpsConfig, command: &'static str) -> Box<dyn AsyncRead + Send + Unpin + Sync> {
-        match ftps_mode {
-            FtpsConfig::Off => Box::new(MeasuringReader::new(socket, command)) as Box<dyn AsyncRead + Send + Unpin + Sync>,
-            FtpsConfig::Building { .. } => panic!("Illegal state"),
-            FtpsConfig::On { tls_config } => {
-                let io = async move {
-                    let acceptor: TlsAcceptor = tls_config.into();
-                    let tls_stream = acceptor.accept(socket).await.unwrap();
-                    MeasuringReader::new(tls_stream, command)
+    // #[tracing_attributes::instrument]
+    async fn reader(socket: TcpStream, #[cfg(feature = "tls")] ftps_mode: FtpsConfig, command: &'static str) -> Box<dyn AsyncRead + Send + Unpin + Sync> {
+        #[cfg(not(feature = "tls"))]
+        {
+            Box::new(MeasuringReader::new(socket, command)) as Box<dyn AsyncRead + Send + Unpin + Sync>
+        }
+        #[cfg(feature = "tls")]
+        {
+            match ftps_mode {
+                FtpsConfig::Off => Box::new(MeasuringReader::new(socket, command)) as Box<dyn AsyncRead + Send + Unpin + Sync>,
+                FtpsConfig::Building { .. } => panic!("Illegal state"),
+                FtpsConfig::On { tls_config } => {
+                    let io = async move {
+                        let acceptor: TlsAcceptor = tls_config.into();
+                        let tls_stream = acceptor.accept(socket).await.unwrap();
+                        MeasuringReader::new(tls_stream, command)
+                    }
+                    .await;
+                    Box::new(io) as Box<dyn AsyncRead + Send + Unpin + Sync>
                 }
-                .await;
-                Box::new(io) as Box<dyn AsyncRead + Send + Unpin + Sync>
             }
         }
     }
@@ -513,6 +545,7 @@ where
                 return;
             }
         };
+        #[cfg(feature = "tls")]
         let ftps_mode = if session.data_tls { session.ftps_config.clone() } else { FtpsConfig::Off };
         let command_executor = DataCommandExecutor {
             user: session.user.clone(),
@@ -520,6 +553,7 @@ where
             control_msg_tx,
             storage: Arc::clone(&session.storage),
             cwd: session.cwd.clone(),
+            #[cfg(feature = "tls")]
             ftps_mode,
             logger,
             data_abort_rx: Some(data_abort_rx),

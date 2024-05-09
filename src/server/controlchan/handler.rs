@@ -35,6 +35,7 @@ where
     pub parsed_command: Command,
     pub session: SharedSession<Storage, User>,
     pub authenticator: Arc<dyn Authenticator<User>>,
+    #[cfg(feature = "tls")]
     pub tls_configured: bool,
     pub passive_ports: Range<u16>,
     pub passive_host: PassiveHost,
