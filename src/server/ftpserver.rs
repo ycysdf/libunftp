@@ -40,7 +40,7 @@ use std::{ffi::OsString, fmt::Debug, future::Future, net::SocketAddr, ops::Range
 ///
 /// let mut rt = Runtime::new().unwrap();
 /// rt.spawn(async {
-///     let server = Server::with_fs("/srv/ftp").build().await.unwrap();
+///     let server = Server::with_fs("/srv/ftp").build().unwrap();
 ///     server.listen("127.0.0.1:2121").await.unwrap()
 /// });
 /// ```
@@ -218,7 +218,7 @@ where
     }
 
     /// Finalize the options and build a [`Server`].
-    pub async fn build(self) -> std::result::Result<Server<Storage, User>, ServerError> {
+    pub fn build(self) -> std::result::Result<Server<Storage, User>, ServerError> {
         #[cfg(feature = "tls")]
         let ftps_mode = match self.ftps_mode {
             FtpsConfig::Off => FtpsConfig::Off,
@@ -622,6 +622,7 @@ where
     ///
     /// - `path` - Path to the helper executable
     /// - `args` - Optional arguments to pass to the helper executable.
+    #[cfg(unix)]
     pub fn connection_helper(mut self, path: OsString, args: Vec<OsString>) -> Self {
         self.connection_helper = Some(path);
         self.connection_helper_args = args;
@@ -708,7 +709,7 @@ where
     ///
     /// let mut rt = Runtime::new().unwrap();
     /// rt.spawn(async {
-    ///     let server = Server::with_fs("/srv/ftp").build().await.unwrap();
+    ///     let server = Server::with_fs("/srv/ftp").build().unwrap();
     ///     server.listen("127.0.0.1:2121").await
     /// });
     /// // ...

@@ -9,7 +9,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! libunftp = "0.19.1"
+//! libunftp = "0.20.0"
 //! unftp-sbe-gcs = "0.2.5"
 //! tokio = { version = "1", features = ["full"] }
 //! ```
@@ -27,7 +27,6 @@
 //!       .greeting("Welcome to my FTP server")
 //!       .passive_ports(50000..65535)
 //!       .build()
-//!       .await
 //!       .unwrap();
 //!
 //!     server.listen("127.0.0.1:2121").await;
@@ -50,7 +49,6 @@
 //!       .greeting("Welcome to my FTP server")
 //!       .passive_ports(50000..65535)
 //!       .build()
-//!       .await
 //!       .unwrap();
 //!
 //!     server.listen("127.0.0.1:2121").await;

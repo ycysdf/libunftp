@@ -21,8 +21,8 @@ Add the libunftp and tokio crates to your project's dependencies in `Cargo.toml`
 
 ```toml
 [dependencies]
-libunftp = "0.19.1"
-unftp-sbe-fs = "0.2.2"
+libunftp = "0.20.0"
+unftp-sbe-fs = "0.2.5"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -37,7 +37,9 @@ pub async fn main() {
     let ftp_home = std::env::temp_dir();
     let server = libunftp::Server::with_fs(ftp_home)
         .greeting("Welcome to my FTP server")
-        .passive_ports(50000..65535);
+        .passive_ports(50000..65535)
+        .build()
+        .unwrap();
 
     server.listen("127.0.0.1:2121").await;
 }
@@ -57,10 +59,11 @@ For more help refer to:
 
 ## Getting help and staying informed
 
-Support is given on a best effort basis. You are welcome to engage us on [the discussions page](https://github.com/bolcom/libunftp/discussions)
+Support is given on a best effort basis. You are welcome to engage us
+on [the discussions page](https://github.com/bolcom/libunftp/discussions)
 or create a Github issue.
 
-You can also follow news and talk to us on [Telegram](https://t.me/unftp) 
+You can also follow news and talk to us on [Telegram](https://t.me/unftp)
 
 ## Contributing
 
@@ -68,9 +71,10 @@ Thank you for your interest in contributing to unftp-sbe-fs!
 
 Please feel free to create a Github issue if you encounter any problems.
 
-Want to submit a feature request or develop your own storage or authentication back-end? Then head over to 
+Want to submit a feature request or develop your own storage or authentication back-end? Then head over to
 our [contribution guide (CONTRIBUTING.md)](../../CONTRIBUTING.md).
 
 ## License
 
-You're free to use, modify and distribute this software under the terms of the [Apache License v2.0](http://www.apache.org/licenses/LICENSE-2.0).
+You're free to use, modify and distribute this software under the terms of
+the [Apache License v2.0](http://www.apache.org/licenses/LICENSE-2.0).
