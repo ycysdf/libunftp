@@ -168,4 +168,10 @@ pub(crate) mod error;
 pub use error::{Error, ErrorKind};
 
 pub(crate) mod storage_backend;
+
 pub use storage_backend::{Fileinfo, Metadata, Permissions, Result, StorageBackend, FEATURE_RESTART, FEATURE_SITEMD5};
+
+#[cfg(feature = "vfs")]
+mod vfs;
+#[cfg(feature = "vfs")]
+pub use vfs::*;
