@@ -7,7 +7,7 @@ pub mod options;
 use super::{
     controlchan,
     failed_logins::FailedLoginsCache,
-    ftpserver::{error::ServerError, error::ShutdownError, options::FtpsRequired, options::SiteMd5},
+    ftpserver::{error::ServerError, error::ShutdownError, options::SiteMd5},
     shutdown,
 };
 use crate::options::ActivePassiveMode;
@@ -16,14 +16,14 @@ use crate::server::tls::{self, FtpsConfig};
 use crate::{
     auth::{anonymous::AnonymousAuthenticator, Authenticator, UserDetail},
     notification::{nop::NopListener, DataListener, PresenceListener},
-    options::{FailedLoginsPolicy, FtpsClientAuth, TlsFlags},
+    options::FailedLoginsPolicy,
     server::proxy_protocol::{ProxyMode, ProxyProtocolSwitchboard},
     server::shutdown::Notifier,
     storage::{Metadata, StorageBackend},
 };
 use options::{PassiveHost, DEFAULT_GREETING, DEFAULT_IDLE_SESSION_TIMEOUT_SECS};
 use slog::*;
-use std::{ffi::OsString, fmt::Debug, future::Future, net::SocketAddr, ops::Range, path::PathBuf, pin::Pin, sync::Arc, time::Duration};
+use std::{ffi::OsString, fmt::Debug, future::Future, net::SocketAddr, ops::Range, pin::Pin, sync::Arc, time::Duration};
 
 /// An instance of an FTP(S) server. It aggregates an [`Authenticator`](crate::auth::Authenticator)
 /// implementation that will be used for authentication, and a [`StorageBackend`](crate::storage::StorageBackend)
@@ -63,9 +63,9 @@ where
     #[cfg(feature = "tls")]
     ftps_mode: FtpsConfig,
     #[cfg(feature = "tls")]
-    ftps_required_control_chan: FtpsRequired,
+    ftps_required_control_chan: crate::options::FtpsRequired,
     #[cfg(feature = "tls")]
-    ftps_required_data_chan: FtpsRequired,
+    ftps_required_data_chan: crate::options::FtpsRequired,
     idle_session_timeout: std::time::Duration,
     proxy_protocol_mode: ProxyMode,
     logger: slog::Logger,
@@ -95,15 +95,15 @@ where
     #[cfg(feature = "tls")]
     ftps_mode: FtpsConfig,
     #[cfg(feature = "tls")]
-    ftps_required_control_chan: FtpsRequired,
+    ftps_required_control_chan: crate::options::FtpsRequired,
     #[cfg(feature = "tls")]
-    ftps_required_data_chan: FtpsRequired,
+    ftps_required_data_chan: crate::options::FtpsRequired,
     #[cfg(feature = "tls")]
-    ftps_tls_flags: TlsFlags,
+    ftps_tls_flags: crate::options::TlsFlags,
     #[cfg(feature = "tls")]
-    ftps_client_auth: FtpsClientAuth,
+    ftps_client_auth: crate::options::FtpsClientAuth,
     #[cfg(feature = "tls")]
-    ftps_trust_store: PathBuf,
+    ftps_trust_store: std::path::PathBuf,
     idle_session_timeout: std::time::Duration,
     proxy_protocol_mode: ProxyMode,
     logger: slog::Logger,
@@ -160,9 +160,9 @@ where
             #[cfg(feature = "tls")]
             ftps_required_data_chan: options::DEFAULT_FTPS_REQUIRE,
             #[cfg(feature = "tls")]
-            ftps_tls_flags: TlsFlags::default(),
+            ftps_tls_flags: crate::options::TlsFlags::default(),
             #[cfg(feature = "tls")]
-            ftps_client_auth: FtpsClientAuth::default(),
+            ftps_client_auth: crate::options::FtpsClientAuth::default(),
             #[cfg(feature = "tls")]
             ftps_trust_store: options::DEFAULT_FTPS_TRUST_STORE.into(),
             site_md5: SiteMd5::default(),
@@ -269,8 +269,7 @@ where
     ///              .ftps("/srv/unftp/server.certs", "/srv/unftp/server.key");
     /// ```
     #[cfg(feature = "tls")]
-    #[cfg(feature = "tls")]
-    pub fn ftps<P: Into<PathBuf>>(mut self, certs_file: P, key_file: P) -> Self {
+    pub fn ftps<P: Into<std::path::PathBuf>>(mut self, certs_file: P, key_file: P) -> Self {
         self.ftps_mode = FtpsConfig::Building {
             certs_file: certs_file.into(),
             key_file: key_file.into(),
@@ -297,7 +296,7 @@ where
     #[cfg(feature = "tls")]
     pub fn ftps_client_auth<C>(mut self, auth: C) -> Self
     where
-        C: Into<FtpsClientAuth>,
+        C: Into<crate::options::FtpsClientAuth>,
     {
         self.ftps_client_auth = auth.into();
         self
@@ -307,7 +306,7 @@ where
     #[cfg(feature = "tls")]
     pub fn ftps_required<R>(mut self, for_control_chan: R, for_data_chan: R) -> Self
     where
-        R: Into<FtpsRequired>,
+        R: Into<crate::options::FtpsRequired>,
     {
         self.ftps_required_control_chan = for_control_chan.into();
         self.ftps_required_data_chan = for_data_chan.into();
@@ -332,7 +331,7 @@ where
     #[cfg(feature = "tls")]
     pub fn ftps_trust_store<P>(mut self, trust: P) -> Self
     where
-        P: Into<PathBuf>,
+        P: Into<std::path::PathBuf>,
     {
         self.ftps_trust_store = trust.into();
         self
@@ -355,7 +354,7 @@ where
     ///                  .ftps_tls_flags(TlsFlags::V1_3 | TlsFlags::RESUMPTION_TICKETS);
     /// ```
     #[cfg(feature = "tls")]
-    pub fn ftps_tls_flags(mut self, flags: TlsFlags) -> Self {
+    pub fn ftps_tls_flags(mut self, flags: crate::options::TlsFlags) -> Self {
         self.ftps_tls_flags = flags;
         self
     }

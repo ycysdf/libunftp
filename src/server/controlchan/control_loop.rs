@@ -25,7 +25,7 @@ use crate::{
             Reply, ReplyCode,
         },
         failed_logins::FailedLoginsCache,
-        ftpserver::options::{FtpsRequired, PassiveHost, SiteMd5},
+        ftpserver::options::{PassiveHost, SiteMd5},
         proxy_protocol::ProxyConnection,
         session::SharedSession,
         shutdown, Event, Session, SessionState,
@@ -67,9 +67,9 @@ where
     pub idle_session_timeout: Duration,
     pub logger: slog::Logger,
     #[cfg(feature = "tls")]
-    pub ftps_required_control_chan: FtpsRequired,
+    pub ftps_required_control_chan: crate::server::ftpserver::options::FtpsRequired,
     #[cfg(feature = "tls")]
-    pub ftps_required_data_chan: FtpsRequired,
+    pub ftps_required_data_chan: crate::server::ftpserver::options::FtpsRequired,
     pub site_md5: SiteMd5,
     pub data_listener: Arc<dyn DataListener>,
     pub presence_listener: Arc<dyn PresenceListener>,
@@ -390,19 +390,19 @@ where
             DelFail => Ok(Reply::new(ReplyCode::TransientFileError, "Failed to delete the file")),
             ExitControlLoop => Ok(Reply::none()),
             SecureControlChannel => {
-                // TODO:
-                let mut session = self.session.lock().await;
                 #[cfg(feature = "tls")]
                 {
-                    session.cmd_tls = true;
+                    // TODO:
+                    let mut _session = self.session.lock().await;
+                    _session.cmd_tls = true;
                 }
                 Ok(Reply::none())
             }
             PlaintextControlChannel => {
-                let mut session = self.session.lock().await;
                 #[cfg(feature = "tls")]
                 {
-                    session.cmd_tls = false;
+                    let mut _session = self.session.lock().await;
+                    _session.cmd_tls = false;
                 }
                 Ok(Reply::none())
             }

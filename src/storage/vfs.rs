@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::SystemTime;
 
 use async_trait::async_trait;
@@ -12,7 +13,7 @@ use vfs::VfsFileType;
 use crate::auth::UserDetail;
 use crate::storage::{ErrorKind, Fileinfo, Metadata, Permissions, StorageBackend};
 
-fn strip_prefixes(path: &Path) -> PathBuf {
+fn normalize_path(path: &Path) -> PathBuf {
     if path.starts_with("/") {
         path.to_path_buf()
     }else{
@@ -22,17 +23,16 @@ fn strip_prefixes(path: &Path) -> PathBuf {
         path_buf
     }
 }
-
 /// VfsStorageBackend
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct VfsStorageBackend<VFS> {
-    vfs: VFS,
+    vfs: Arc<VFS>,
     // path: Path
 }
 
 impl<VFS> VfsStorageBackend<VFS> {
     ///
-    pub fn new(vfs: VFS)->Self {
+    pub fn new(vfs: Arc<VFS>)->Self {
         Self{
             vfs
         }
@@ -60,7 +60,7 @@ impl<User: UserDetail,VFS: AsyncFileSystem> StorageBackend<User> for VfsStorageB
 
     #[tracing_attributes::instrument]
     async fn metadata<P: AsRef<Path> + Send + Debug>(&self, _user: &User, path: P) -> crate::storage::Result<Self::Metadata> {
-        let path = strip_prefixes(path.as_ref());
+        let path = normalize_path(path.as_ref());
         Ok(self.vfs.metadata(path.to_str().unwrap()).await.map_err(|err| crate::storage::Error::new(ErrorKind::LocalError,err))?)
     }
 
@@ -73,7 +73,7 @@ impl<User: UserDetail,VFS: AsyncFileSystem> StorageBackend<User> for VfsStorageB
     {
 
         use futures_util::stream::TryStreamExt;
-        let path = strip_prefixes(path.as_ref());
+        let path = normalize_path(path.as_ref());
 
         let stream = self.vfs.read_dir(path.to_str().unwrap()).await
             .map_err(|err| crate::storage::Error::new(ErrorKind::LocalError,err))?;
@@ -92,7 +92,7 @@ impl<User: UserDetail,VFS: AsyncFileSystem> StorageBackend<User> for VfsStorageB
 
     //#[tracing_attributes::instrument]
     async fn get<P: AsRef<Path> + Send + Debug>(&self, _user: &User, path: P, start_pos: u64) -> crate::storage::Result<Box<dyn tokio::io::AsyncRead + Send + Sync + Unpin>> {
-        let path = strip_prefixes(path.as_ref());
+        let path = normalize_path(path.as_ref());
         use futures_util::AsyncSeekExt;
         let mut reader = self.vfs.open_file(path.to_str().unwrap()).await.map_err(|err| crate::storage::Error::new(ErrorKind::LocalError,err))?;
         if start_pos > 0 {
@@ -116,8 +116,8 @@ impl<User: UserDetail,VFS: AsyncFileSystem> StorageBackend<User> for VfsStorageB
         path: P,
         start_pos: u64,
     ) -> crate::storage::Result<u64> {
-        let path = strip_prefixes(path.as_ref());
-        let writer = self.vfs.append_file(path.to_str().unwrap()).await.map_err(|err| crate::storage::Error::new(ErrorKind::LocalError, err))?;
+        let path = normalize_path(path.as_ref());
+        let writer = self.vfs.create_file(path.to_str().unwrap()).await.map_err(|err| crate::storage::Error::new(ErrorKind::LocalError, err))?;
         if start_pos >0 {
             unimplemented!()
         }
@@ -129,33 +129,35 @@ impl<User: UserDetail,VFS: AsyncFileSystem> StorageBackend<User> for VfsStorageB
 
     #[tracing_attributes::instrument]
     async fn del<P: AsRef<Path> + Send + Debug>(&self, _user: &User, path: P) -> crate::storage::Result<()> {
-        let path = strip_prefixes(path.as_ref());
+        let path = normalize_path(path.as_ref());
         self.vfs.remove_file(path.to_str().unwrap()).await.map_err(|err| crate::storage::Error::new(ErrorKind::LocalError,err))
     }
 
     #[tracing_attributes::instrument]
     async fn mkd<P: AsRef<Path> + Send + Debug>(&self, _user: &User, path: P) -> crate::storage::Result<()> {
-        let path = strip_prefixes(path.as_ref());
+        let path = normalize_path(path.as_ref());
         self.vfs.create_dir(path.to_str().unwrap()).await.map_err(|err| crate::storage::Error::new(ErrorKind::LocalError,err))
     }
 
     #[tracing_attributes::instrument]
     async fn rename<P: AsRef<Path> + Send + Debug>(&self, _user: &User, from: P, to: P) -> crate::storage::Result<()> {
-        let from = strip_prefixes(from.as_ref());
-        let to= strip_prefixes(to.as_ref());
+        let from = normalize_path(from.as_ref());
+        let to= normalize_path(to.as_ref());
         self.vfs.move_file(from.to_str().unwrap(),to.to_str().unwrap()).await.map_err(|err| crate::storage::Error::new(ErrorKind::LocalError,err))
     }
 
     #[tracing_attributes::instrument]
     async fn rmd<P: AsRef<Path> + Send + Debug>(&self, _user: &User, path: P) -> crate::storage::Result<()> {
-        let path = strip_prefixes(path.as_ref());
+        let path = normalize_path(path.as_ref());
         self.vfs.remove_dir(path.to_str().unwrap()).await.map_err(|err| crate::storage::Error::new(ErrorKind::LocalError,err))
     }
 
     #[tracing_attributes::instrument]
     async fn cwd<P: AsRef<Path> + Send + Debug>(&self, user: &User, path: P) -> crate::storage::Result<()> {
-        let path = strip_prefixes(path.as_ref());
-        self.list(user, path).await.map(drop)
+        let _path = normalize_path(path.as_ref());
+        // unimplemented!()
+        // self.list(user, path).await.map(drop)
+        Ok(())
     }
 }
 
@@ -195,5 +197,96 @@ impl Metadata for vfs::VfsMetadata {
 
     fn permissions(&self) -> Permissions {
         Permissions(0o7755)
+    }
+}
+
+
+
+#[cfg(test)]
+mod test {
+    use std::io::SeekFrom;
+    use std::net::SocketAddr;
+    use std::sync::Arc;
+
+    use async_ftp::FtpStream;
+    use futures_util::{AsyncSeekExt, AsyncWriteExt};
+    use vfs::async_vfs::{AsyncFileSystem, AsyncMemoryFS};
+    use vfs::VfsResult;
+
+    use crate::ServerBuilder;
+    use crate::storage::VfsStorageBackend;
+
+    #[tokio::test]
+    async fn copy_file_across_filesystems() -> VfsResult<()> {
+        let vfs = AsyncMemoryFS::new();
+        {
+            let mut writer = vfs.create_file("/test.txt").await.unwrap();
+            writer.write_all(b"test.txt").await.unwrap();
+            writer.flush().await.unwrap();
+            writer.close().await.unwrap();
+        }
+        {
+
+            use futures_util::AsyncReadExt;
+            let mut reader  = vfs.open_file("/test.txt").await.unwrap();
+            reader.seek(SeekFrom::Start(0)).await.unwrap();
+            let mut r = String::new();
+            reader.read_to_string(&mut r).await.unwrap();
+            println!("rrrs {}",r);
+        }
+        Ok(())
+    }
+    async fn server_listen()->SocketAddr
+    {
+        let addr = SocketAddr::from(([127,0,0,1],1234));
+
+        tokio::spawn(async move {
+            let vfs = Arc::new(AsyncMemoryFS::new());
+            {
+                let mut writer = vfs.create_file("/test.txt").await.unwrap();
+                writer.write_all(b"test.txt").await.unwrap();
+                writer.flush().await.unwrap();
+                writer.close().await.unwrap();
+            }
+            let server = ServerBuilder::new(Box::new(move || VfsStorageBackend::new(vfs.clone()))).build().unwrap();
+
+            server.listen(addr.to_string()).await.unwrap();
+        });
+        while async_ftp::FtpStream::connect(&addr).await.is_err() {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        addr
+    }
+
+
+    #[tokio::test]
+    async fn test() {
+        println!("test");
+        let addr = server_listen().await;
+
+        // Retrieve the remote file
+        let mut ftp_stream = FtpStream::connect(addr).await.unwrap();
+
+        ftp_stream.login("hoi", "jij").await.unwrap();
+
+
+        let remote_file = ftp_stream.simple_retr("test.txt").await.unwrap().into_inner();
+        pretty_assertions::assert_eq!(remote_file,b"test.txt");
+
+        assert_eq!(ftp_stream.simple_retr("bla.txt").await.is_err(),true);
+
+
+        let mut data = vec![0; 1024];
+        getrandom::getrandom(&mut data).expect("Error generating random bytes");
+
+        ftp_stream.put("bla.txt", &mut &data[..]).await.unwrap();
+        let remote_file = ftp_stream.simple_retr("bla.txt").await.unwrap();
+        let remote_data = remote_file.into_inner();
+
+        pretty_assertions::assert_eq!(remote_data, data);
+
+        ftp_stream.rm("bla.txt").await.unwrap();
+
+        assert_eq!(ftp_stream.simple_retr("bla.txt").await.is_err(),true);
     }
 }

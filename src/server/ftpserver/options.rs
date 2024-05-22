@@ -18,7 +18,9 @@ pub(crate) const DEFAULT_GREETING: &str = "Welcome to the libunftp FTP server";
 pub(crate) const DEFAULT_IDLE_SESSION_TIMEOUT_SECS: u64 = 600;
 pub(crate) const DEFAULT_PASSIVE_HOST: PassiveHost = PassiveHost::FromConnection;
 pub(crate) const DEFAULT_PASSIVE_PORTS: Range<u16> = 49152..65535;
+#[cfg(feature = "tls")]
 pub(crate) const DEFAULT_FTPS_REQUIRE: FtpsRequired = FtpsRequired::None;
+#[cfg(feature = "tls")]
 pub(crate) const DEFAULT_FTPS_TRUST_STORE: &str = "./trusted.pem";
 
 /// A helper trait to customize how the server binds to ports

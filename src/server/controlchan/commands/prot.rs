@@ -43,11 +43,11 @@ where
     Storage::Metadata: 'static + Metadata,
 {
     #[tracing_attributes::instrument]
-    async fn handle(&self, args: CommandContext<Storage, User>) -> Result<Reply, ControlChanError> {
+    async fn handle(&self, _args: CommandContext<Storage, User>) -> Result<Reply, ControlChanError> {
         let tls = {
             #[cfg(feature = "tls")]
             {
-                args.tls_configured
+                _args.tls_configured
             }
             #[cfg(not(feature = "tls"))]
             {
@@ -56,9 +56,9 @@ where
         };
         match (tls, self.param.clone()) {
             (true, ProtParam::Clear) => {
-                let mut session = args.session.lock().await;
                 #[cfg(feature = "tls")]
                 {
+                    let mut session = _args.session.lock().await;
                     session.data_tls = false;
                 }
                 Ok(Reply::new(ReplyCode::CommandOkay, "PROT OK. Switching data channel to plaintext"))
@@ -70,7 +70,7 @@ where
                 }
                 #[cfg(feature = "tls")]
                 {
-                    let mut session = args.session.lock().await;
+                    let mut session = _args.session.lock().await;
                     session.data_tls = true;
                     Ok(Reply::new(ReplyCode::CommandOkay, "PROT OK. Securing data channel"))
                 }

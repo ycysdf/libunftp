@@ -87,6 +87,8 @@ vfs = {version = "0.12",features = ["async-vfs","tokio"],optional = true}
 pretty_assertions = "1.4.0"
 tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }
 unftp-sbe-fs = { path = "../libunftp/crates/unftp-sbe-fs" }
+async_ftp = "6.0.0"
+vfs = {version = "0.12",features = ["async-vfs","tokio"]}
 
 [features]
 default = ["tls"]

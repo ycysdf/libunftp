@@ -8,7 +8,7 @@ use crate::storage::Metadata;
 use crate::{
     auth::Authenticator,
     auth::UserDetail,
-    options::{FtpsRequired, PassiveHost, SiteMd5},
+    options::{PassiveHost, SiteMd5},
     server::controlchan,
     storage::StorageBackend,
 };
@@ -31,9 +31,9 @@ where
     pub idle_session_timeout: Duration,
     pub logger: slog::Logger,
     #[cfg(feature = "tls")]
-    pub ftps_required_control_chan: FtpsRequired,
+    pub ftps_required_control_chan: crate::options::FtpsRequired,
     #[cfg(feature = "tls")]
-    pub ftps_required_data_chan: FtpsRequired,
+    pub ftps_required_data_chan: crate::options::FtpsRequired,
     pub site_md5: SiteMd5,
     pub data_listener: Arc<dyn DataListener>,
     pub presence_listener: Arc<dyn PresenceListener>,
